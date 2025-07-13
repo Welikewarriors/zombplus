@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zombplus Browser Game</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #001a00; /* dark green base */
+    color: white;
+    font-family: Arial, sans-serif;
+    user-select: none;
+  }
+  canvas {
+    display: block;
+    background-color: transparent;
+    position: absolute;
+    top: 0; left: 0;
+  }
+  #ui {
+    position: fixed;
+    top: 5px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 16px;
+    text-align: center;
+    z-index: 10;
+  }
+  #resources {
+    margin-bottom: 5px;
+  }
+  #waveInfo {
+    margin-bottom: 10px;
+  }
+  #notifications {
+    position: fixed;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    max-width: 90vw;
+    pointer-events: none;
+    z-index: 20;
+  }
+  .notification {
+    background: rgba(0,0,0,0.7);
+    padding: 10px 15px;
+    margin-bottom: 5px;
+    border-radius: 6px;
+    font-weight: bold;
+    animation: slideDown 0.5s ease forwards;
+  }
+  @keyframes slideDown {
+    from {opacity: 0; transform: translateY(-30px);}
+    to {opacity: 1; transform: translateY(0);}
+  }
+
+  /* Hotbar Styles */
+  #hotbar {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    z-index: 15;
+  }
+  .hotbar-item {
+    background-color: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    width: 48px;
+    height: 48px;
+    color: white;
+    font-size: 32px;
+    text-align: center;
+    line-height: 48px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.3s ease;
+  }
+  .hotbar-item.selected {
+    border-color: #7CFC00; /* bright green border for selected */
+    background-color: rgba(124, 252, 0, 0.3);
+  }
+
+  /* Shop and Settings overlays */
+  #shopMenu, #settingsMenu {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    z-index: 30;
+    color: white;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+  #shopMenu.active, #settingsMenu.active {
+    display: block;
+  }
+  .menu-close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: #333;
+    border: none;
+    color: white;
+    padding: 8px 14px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  /* Buttons on top */
+  #topButtons {
+    position: fixed;
+    top: 5px;
+    right: 10px;
+    display: flex;
+    gap: 10px;
+    z-index: 20;
+  }
+  #topButtons button {
+    background: rgba(255,255,255,0.1);
+    border: 1.5px solid white;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    user-select: none;
+  }
+  #topButtons button:hover {
+    background: rgba(124,252,0,0.4);
+    border-color: #7CFC00;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="1280" height="720"></canvas>
+
+<div id="ui">
+  <div id="resources">Gold: 0 | Wood: 0 | Stone: 0 | HP: 100 | Score: 0</div>
+  <div id="waveInfo">Wave: 0 | Zombies Alive: 0</div>
+</div>
+
+<div id="notifications"></div>
+
+<div id="hotbar">
+  <div class="hotbar-item selected" data-type="pickaxe" title="Pickaxe">🪓</div>
+  <div class="hotbar-item" data-type="spear" title="Spear">🗡️</div>
+  <div class="hotbar-item" data-type="carl" title="Pet Carl">🐶</div>
+  <div class="hotbar-item" data-type="arrow" title="Arrow Tower">🏹</div>
+  <div class="hotbar-item" data-type="bomb" title="Bomb Tower">💣</div>
+  <div class="hotbar-item" data-type="mage" title="Mage Tower">🔮</div>
+  <div class="hotbar-item" data-type="melee" title="Melee Tower">🛡️</div>
+  <div class="hotbar-item" data-type="goldstash" title="Gold Stash">💰</div>
+  <div class="hotbar-item" data-type="goldmine" title="Gold Mine">🏆</div>
+</div>
+
+<div id="topButtons">
+  <button id="openShopBtn">Shop</button>
+  <button id="openSettingsBtn">Settings</button>
+</div>
+
+<div id="shopMenu">
+  <button class="menu-close-btn" id="closeShopBtn">Close</button>
+  <h1>Shop</h1>
+  <p>Get items here (for now free):</p>
+  <ul>
+    <li>Pickaxe 🪓 (free)</li>
+    <li>Spear 🗡️</li>
+    <li>Pet Carl 🐶</li>
+    <li>Arrow Tower 🏹</li>
+    <li>Bomb Tower 💣</li>
+    <li>Mage Tower 🔮</li>
+    <li>Melee Tower 🛡️</li>
+    <li>Gold Stash 💰</li>
+    <li>Gold Mine 🏆</li>
+  </ul>
+</div>
+
+<div id="settingsMenu">
+  <button class="menu-close-btn" id="closeSettingsBtn">Close</button>
+  <h1>Settings</h1>
+  <button id="saveGameBtn">Save Game</button>
+  <button id="loadGameBtn">Load Game</button>
+  <p>Use these to save/load your progress.</p>
+</div>
+
+<script>
+// JavaScript game logic (simplified and integrated with your previous requests)
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const mapSize = 5000; // Bigger map
+
+// Player data
+const player = {
+  x: mapSize / 2,
+  y: mapSize / 2,
+  radius: 20,
+  speed: 250,
+  hp: 100,
+  facingAngle: 0,
+  equipped: "pickaxe",
+  swingTime: 0,
+  swingDuration: 0.4,
+  pet: null,
+  hasPet: false,
+};
+
+// Resources
+let resources = {
+  gold: 0,
+  wood: 0,
+  stone: 0,
+};
+
+// Score and wave
+let score = 0;
+let wave = 0;
+let waveTimer = 0;
+const waveInterval = 15;
+
+// Camera
+const camera = { x: 0, y: 0 };
+
+// Input
+const keys = {};
+let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+
+window.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+});
+window.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+});
+canvas.addEventListener("mousemove", e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+
+// Notifications
+const notificationsDiv = document.getElementById("notifications");
+function showNotification(text) {
+  const notif = document.createElement("div");
+  notif.className = "notification";
+  notif.textContent = text;
+  notificationsDiv.appendChild(notif);
+  setTimeout(() => notif.remove(), 3000);
+}
+
+// Hotbar logic
+const hotbarItems = document.querySelectorAll(".hotbar-item");
+let selectedHotbarType = "pickaxe";
+
+hotbarItems.forEach(item => {
+  item.addEventListener("click", () => {
+    hotbarItems.forEach(i => i.classList.remove("selected"));
+    item.classList.add("selected");
+    selectedHotbarType = item.getAttribute("data-type");
+    // Handle pet equip logic
+    if(selectedHotbarType === "carl" && !player.hasPet){
+      player.pet = new PetCarl(player);
+      player.hasPet = true;
+    } else if(selectedHotbarType !== "carl") {
+      player.pet = null;
+      player.hasPet = false;
+    }
+  });
+});
+
+// Simple helper clamp function
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
+// Entities arrays
+let trees = [];
+let stones = [];
+let zombies = [];
+let towers = [];
+let projectiles = [];
+let goldMines = [];
+let goldStash = null;
+
+// Spawn some trees and stones randomly
+function spawnResources() {
+  for(let i = 0; i < 150; i++) {
+    trees.push(new Tree(Math.random()*mapSize, Math.random()*mapSize));
+    stones.push(new Stone(Math.random()*mapSize, Math.random()*mapSize));
+  }
+}
+
+// Entity Classes
+class Tree {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.radius = 20;
+    this.hp = 100;
+  }
+  draw(ctx, cam){
+    ctx.fillStyle = "#228B22"; // forest green
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+class Stone {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.radius = 18;
+    this.hp = 100;
+  }
+  draw(ctx, cam){
+    ctx.fillStyle = "#888888"; // gray stone
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+class GoldStash {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.radius = 30;
+  }
+  draw(ctx, cam){
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+
+    // Draw stash base circle gold
+    ctx.fillStyle = "#FFD700"; // gold color
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Draw small gold balls (what zombies chase)
+    for(let i=0; i<10; i++){
+      const angle = (i/10)*Math.PI*2 + (performance.now()/1000);
+      const bx = sx + Math.cos(angle)*this.radius*0.7;
+      const by = sy + Math.sin(angle)*this.radius*0.7;
+      ctx.beginPath();
+      ctx.fillStyle = "#FFD700";
+      ctx.arc(bx, by, 5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+class GoldMine {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.radius = 25;
+    this.goldPerSecond = 1;
+    this.timer = 0;
+  }
+  update(dt){
+    this.timer += dt;
+    if(this.timer >= 1){
+      resources.gold += this.goldPerSecond;
+      this.timer = 0;
+    }
+  }
+  draw(ctx, cam){
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    // Base circle
+    ctx.fillStyle = "#DAA520"; // goldenrod
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // Gold ingot icon (simplified rectangle)
+    ctx.fillStyle = "#FFD700";
+    ctx.fillRect(sx-10, sy-5, 20, 10);
+    ctx.strokeRect(sx-10, sy-5, 20, 10);
+  }
+}
+
+class Tower {
+  constructor(x, y, type){
+    this.x = x;
+    this.y = y;
+    this.radius = 25;
+    this.type = type;
+    this.level = 1;
+    this.hp = 100;
+    this.maxHp = 100;
+    this.fireRate = 1; // shots per second
+    this.fireCooldown = 0;
+    this.range = 150;
+    this.knockback = 100;
+    this.color = this.getColorByType();
+  }
+  getColorByType(){
+    switch(this.type){
+      case "arrow": return "#6b8cff";
+      case "bomb": return "#ff6666";
+      case "mage": return "#4bd8ff";
+      case "melee": return "#aaaaaa";
+      case "goldmine": return "#daa520";
+      default: return "#ccc";
+    }
+  }
+  upgrade(){
+    this.level++;
+    this.hp += 50;
+    this.maxHp += 50;
+    this.fireRate += 0.3;
+    this.range += 20;
+    this.knockback += 20;
+  }
+  update(dt){
+    this.fireCooldown -= dt;
+    if(this.fireCooldown <= 0){
+      const target = zombies.find(z => {
+        const dx = z.x - this.x;
+        const dy = z.y - this.y;
+        return (Math.hypot(dx, dy) <= this.range);
+      });
+      if(target){
+        this.shoot(target);
+        this.fireCooldown = 1/this.fireRate;
+      }
+    }
+  }
+  shoot(target){
+    // Create projectile
+    projectiles.push(new Projectile(this.x, this.y, target, this.type, this.knockback));
+  }
+  draw(ctx, cam){
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    // Tower base
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Draw tower icon on top:
+    ctx.fillStyle = "black";
+    ctx.font = "22px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    let icon = "?";
+    switch(this.type){
+      case "arrow": icon = "🏹"; break;
+      case "bomb": icon = "💣"; break;
+      case "mage": icon = "⚪⚪⚪⚪"; break;
+      case "melee": icon = "🦴"; break;
+      case "goldmine": icon = "🏆"; break;
+    }
+    ctx.fillText(icon, sx, sy - this.radius - 15);
+
+    // Health bar
+    ctx.fillStyle = "red";
+    ctx.fillRect(sx - this.radius, sy + this.radius + 5, this.radius*2, 5);
+    ctx.fillStyle = "lime";
+    ctx.fillRect(sx - this.radius, sy + this.radius + 5, this.radius*2 * (this.hp / this.maxHp), 5);
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx - this.radius, sy + this.radius + 5, this.radius*2, 5);
+  }
+}
+
+class Projectile {
+  constructor(x, y, target, type, knockback){
+    this.x = x;
+    this.y = y;
+    this.target = target;
+    this.speed = 800;
+    this.radius = 6;
+    this.active = true;
+    this.type = type;
+    this.knockback = knockback;
+    this.damage = 20 + (type === "bomb" ? 40 : 0);
+  }
+  update(dt){
+    if(!this.active) return;
+    let dx = this.target.x - this.x;
+    let dy = this.target.y - this.y;
+    let dist = Math.hypot(dx, dy);
+    if(dist < this.speed * dt || dist < this.radius + this.target.radius){
+      this.hitTarget();
+      return;
+    }
+    dx /= dist; dy /= dist;
+    this.x += dx * this.speed * dt;
+    this.y += dy * this.speed * dt;
+  }
+  hitTarget(){
+    this.target.hp -= this.damage;
+    // Knockback
+    let dx = this.target.x - this.x;
+    let dy = this.target.y - this.y;
+    let dist = Math.hypot(dx, dy);
+    if(dist > 0){
+      dx /= dist; dy /= dist;
+      this.target.x += dx * this.knockback * 0.1;
+      this.target.y += dy * this.knockback * 0.1;
+    }
+    this.active = false;
+  }
+  draw(ctx, cam){
+    if(!this.active) return;
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    ctx.fillStyle = this.type === "bomb" ? "#ff5555" : "#ffffaa";
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+class Zombie {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.radius = 18;
+    this.speed = 90;
+    this.hp = 100 + wave * 20;
+  }
+  update(dt){
+    // Zombies target gold stash if exists, else player
+    const target = goldStash || player;
+    let dx = target.x - this.x;
+    let dy = target.y - this.y;
+    let dist = Math.hypot(dx, dy);
+    if(dist > 0){
+      dx /= dist; dy /= dist;
+      this.x += dx * this.speed * dt;
+      this.y += dy * this.speed * dt;
+    }
+  }
+  draw(ctx, cam){
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    ctx.fillStyle = "#550000"; // dark red zombie
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+// Pet Carl
+class PetCarl {
+  constructor(owner){
+    this.owner = owner;
+    this.x = owner.x + 40;
+    this.y = owner.y + 40;
+    this.radius = 12;
+    this.speed = 280;
+    this.target = null;
+  }
+  update(dt){
+    if(zombies.length === 0) return;
+    if(!this.target || this.target.hp <= 0) {
+      this.target = zombies[0];
+    }
+    let dx = this.target.x - this.x;
+    let dy = this.target.y - this.y;
+    let dist = Math.hypot(dx, dy);
+    if(dist > this.radius + this.target.radius + 20) {
+      dx /= dist; dy /= dist;
+      this.x += dx * this.speed * dt;
+      this.y += dy * this.speed * dt;
+    } else {
+      // attack
+      this.target.hp -= 50 * dt;
+      if(this.target.hp <= 0){
+        score += 2000 * wave;
+        showNotification("Zombie killed by Carl!");
+      }
+    }
+  }
+  draw(ctx, cam){
+    const sx = this.x - cam.x;
+    const sy = this.y - cam.y;
+    ctx.fillStyle = "#deb887"; // burlywood (light brown)
+    ctx.beginPath();
+    ctx.arc(sx, sy, this.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "black";
+    ctx.font = "12px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Carl", sx, sy + 25);
+  }
+}
+
+function drawGrid(){
+  const size = 50;
+  ctx.strokeStyle = "#002200"; // very dark green
+  ctx.lineWidth = 1;
+  const startX = - (camera.x % size);
+  const startY = - (camera.y % size);
+  for(let x = startX; x < canvas.width; x += size){
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for(let y = startY; y < canvas.height; y += size){
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+}
+
+function drawPlayer(){
+  const sx = player.x - camera.x;
+  const sy = player.y - camera.y;
+
+  // Body peach color
+  ctx.fillStyle = "#FFDAB9";
+  ctx.beginPath();
+  ctx.arc(sx, sy, player.radius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Draw hands - 2 circles spaced out, rotated to facing direction
+  const handDistance = 30;
+  const handRadius = 10;
+
+  // Calculate hand positions with a slight wider spacing (from your request)
+  const handAngle1 = player.facingAngle + 0.3;
+  const handAngle2 = player.facingAngle - 0.3;
+
+  const hand1X = sx + Math.cos(handAngle1) * handDistance;
+  const hand1Y = sy + Math.sin(handAngle1) * handDistance;
+  const hand2X = sx + Math.cos(handAngle2) * handDistance;
+  const hand2Y = sy + Math.sin(handAngle2) * handDistance;
+
+  ctx.fillStyle = "#FFDAB9";
+  ctx.beginPath();
+  ctx.arc(hand1X, hand1Y, handRadius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hand2X, hand2Y, handRadius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Draw pickaxe sprite on right hand if equipped
+  if(player.equipped === "pickaxe"){
+    ctx.strokeStyle = "#6b4f1d"; // brown handle
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(hand2X, hand2Y);
+    ctx.lineTo(hand2X + 20 * Math.cos(player.facingAngle), hand2Y + 20 * Math.sin(player.facingAngle));
+    ctx.stroke();
+    ctx.fillStyle = "#555555"; // grey pickaxe head
+    ctx.beginPath();
+    ctx.moveTo(hand2X + 20 * Math.cos(player.facingAngle), hand2Y + 20 * Math.sin(player.facingAngle));
+    ctx.lineTo(hand2X + 25 * Math.cos(player.facingAngle + 0.5), hand2Y + 25 * Math.sin(player.facingAngle + 0.5));
+    ctx.lineTo(hand2X + 25 * Math.cos(player.facingAngle - 0.5), hand2Y + 25 * Math.sin(player.facingAngle - 0.5));
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// Main game loop variables
+let lastTime = performance.now();
+
+function update(dt) {
+  // Player movement WASD
+  let moveX = 0, moveY = 0;
+  if(keys["w"]) moveY -= 1;
+  if(keys["s"]) moveY += 1;
+  if(keys["a"]) moveX -= 1;
+  if(keys["d"]) moveX += 1;
+
+  const len = Math.hypot(moveX, moveY);
+  if(len > 0){
+    moveX /= len;
+    moveY /= len;
+  }
+  player.x += moveX * player.speed * dt;
+  player.y += moveY * player.speed * dt;
+
+  // Clamp player inside map
+  player.x = clamp(player.x, 0, mapSize);
+  player.y = clamp(player.y, 0, mapSize);
+
+  // Player facing angle towards mouse position
+  player.facingAngle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
+
+  // Swing pickaxe logic
+  if(player.equipped === "pickaxe" && keys[" "]) {
+    player.swingTime += dt;
+    if(player.swingTime >= player.swingDuration){
+      player.swingTime = 0;
+      hitResources();
+    }
+  } else {
+    player.swingTime = player.swingDuration;
+  }
+
+  // Update pet Carl
+  if(player.hasPet && player.pet){
+    player.pet.update(dt);
+  }
+
+  // Update towers
+  towers.forEach(tower => tower.update(dt));
+  // Update projectiles
+  projectiles.forEach(p => p.update(dt));
+  projectiles = projectiles.filter(p => p.active);
+  // Update zombies
+  zombies.forEach(z => z.update(dt));
+
+  // Update gold mines
+  goldMines.forEach(gm => gm.update(dt));
+
+  // Remove dead zombies and award score
+  for(let i = zombies.length - 1; i >= 0; i--){
+    if(zombies[i].hp <= 0){
+      score += 2000 + (wave - 1) * 500;
+      showNotification("Zombie killed! +Score");
+      zombies.splice(i, 1);
+    }
+  }
+
+  // Spawn waves only if gold stash placed
+  if(goldStash){
+    waveTimer += dt;
+    if(waveTimer >= waveInterval){
+      wave++;
+      spawnWave();
+      waveTimer = 0;
+      showNotification(`Wave ${wave} started!`);
+    }
+  }
+
+  // Update camera to center on player
+  camera.x = player.x - canvas.width / 2;
+  camera.y = player.y - canvas.height / 2;
+
+  // Clamp camera inside map
+  camera.x = clamp(camera.x, 0, mapSize - canvas.width);
+  camera.y = clamp(camera.y, 0, mapSize - canvas.height);
+}
+
+function hitResources(){
+  // Check nearby trees & stones in swing arc
+  const swingRadius = 40;
+  // Find resources in front arc (angle +/- ~0.5 rad)
+  trees.forEach(t => {
+    if(t.hp <= 0) return;
+    const dx = t.x - player.x;
+    const dy = t.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist < player.radius + swingRadius + t.radius){
+      const angleToTree = Math.atan2(dy, dx);
+      let diff = angleToTree - player.facingAngle;
+      if(diff > Math.PI) diff -= 2 * Math.PI;
+      if(diff < -Math.PI) diff += 2 * Math.PI;
+      if(Math.abs(diff) < 0.6){
+        // Hit tree
+        t.hp -= 50;
+        if(t.hp <= 0) {
+          resources.wood += 10;
+          showNotification("Wood +10");
+        }
+      }
+    }
+  });
+  stones.forEach(s => {
+    if(s.hp <= 0) return;
+    const dx = s.x - player.x;
+    const dy = s.y - player.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist < player.radius + swingRadius + s.radius){
+      const angleToStone = Math.atan2(dy, dx);
+      let diff = angleToStone - player.facingAngle;
+      if(diff > Math.PI) diff -= 2 * Math.PI;
+      if(diff < -Math.PI) diff += 2 * Math.PI;
+      if(Math.abs(diff) < 0.6){
+        // Hit stone
+        s.hp -= 50;
+        if(s.hp <= 0) {
+          resources.stone += 10;
+          showNotification("Stone +10");
+        }
+      }
+    }
+  });
+}
+
+function spawnWave(){
+  // Spawn more zombies per wave
+  let count = 5 + wave * 3;
+  for(let i = 0; i < count; i++){
+    // Spawn zombies randomly around map edges
+    let x = Math.random() < 0.5 ? 0 : mapSize;
+    let y = Math.random() * mapSize;
+    if(Math.random() < 0.5){
+      x = Math.random() * mapSize;
+      y = Math.random() < 0.5 ? 0 : mapSize;
+    }
+    zombies.push(new Zombie(x, y));
+  }
+}
+
+// Draw everything
+function draw(){
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawGrid();
+
+  // Draw trees and stones
+  trees.forEach(t => { if(t.hp > 0) t.draw(ctx, camera); });
+  stones.forEach(s => { if(s.hp > 0) s.draw(ctx, camera); });
+
+  // Draw gold stash
+  if(goldStash) goldStash.draw(ctx, camera);
+
+  // Draw gold mines
+  goldMines.forEach(gm => gm.draw(ctx, camera));
+
+  // Draw towers
+  towers.forEach(t => t.draw(ctx, camera));
+
+  // Draw zombies
+  zombies.forEach(z => z.draw(ctx, camera));
+
+  // Draw projectiles
+  projectiles.forEach(p => p.draw(ctx, camera));
+
+  // Draw pet Carl
+  if(player.hasPet && player.pet){
+    player.pet.draw(ctx, camera);
+  }
+
+  drawPlayer();
+}
+
+// Main loop
+function gameLoop(timestamp){
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+
+  update(dt);
+  draw();
+
+  // Update UI
+  document.getElementById("resources").textContent =
+    `Gold: ${resources.gold} | Wood: ${resources.wood} | Stone: ${resources.stone} | HP: ${player.hp} | Score: ${score}`;
+  document.getElementById("waveInfo").textContent =
+    `Wave: ${wave} | Zombies Alive: ${zombies.length}`;
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Spawn initial resources & start
+spawnResources();
+gameLoop(performance.now());
+
+// Hotbar interaction: place towers, gold stash, gold mine
+canvas.addEventListener("click", e => {
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left + camera.x;
+  const mouseY = e.clientY - rect.top + camera.y;
+
+  switch(selectedHotbarType){
+    case "goldstash":
+      if(!goldStash){
+        goldStash = new GoldStash(mouseX, mouseY);
+        showNotification("Gold Stash placed! Zombies will now spawn.");
+      }
+      break;
+    case "goldmine":
+      goldMines.push(new GoldMine(mouseX, mouseY));
+      showNotification("Gold Mine placed!");
+      break;
+    case "arrow":
+    case "bomb":
+    case "mage":
+    case "melee":
+      towers.push(new Tower(mouseX, mouseY, selectedHotbarType));
+      showNotification(selectedHotbarType.charAt(0).toUpperCase() + selectedHotbarType.slice(1) + " Tower placed!");
+      break;
+  }
+});
+
+// Shop and settings menu toggle
+const shopMenu = document.getElementById("shopMenu");
+const settingsMenu = document.getElementById("settingsMenu");
+document.getElementById("openShopBtn").addEventListener("click", () => {
+  shopMenu.classList.add("active");
+});
+document.getElementById("closeShopBtn").addEventListener("click", () => {
+  shopMenu.classList.remove("active");
+});
+document.getElementById("openSettingsBtn").addEventListener("click", () => {
+  settingsMenu.classList.add("active");
+});
+document.getElementById("closeSettingsBtn").addEventListener("click", () => {
+  settingsMenu.classList.remove("active");
+});
+
+// Save/load game using localStorage
+document.getElementById("saveGameBtn").addEventListener("click", () => {
+  const saveData = {
+    player,
+    resources,
+    score,
+    wave,
+    goldStash: goldStash ? { x: goldStash.x, y: goldStash.y } : null,
+    goldMines: goldMines.map(gm => ({x: gm.x, y: gm.y})),
+    towers: towers.map(t => ({x: t.x, y: t.y, type: t.type, level: t.level})),
+  };
+  localStorage.setItem("zombplus_save", JSON.stringify(saveData));
+  showNotification("Game saved!");
+});
+document.getElementById("loadGameBtn").addEventListener("click", () => {
+  const loadData = JSON.parse(localStorage.getItem("zombplus_save"));
+  if(loadData){
+    Object.assign(player, loadData.player);
+    Object.assign(resources, loadData.resources);
+    score = loadData.score;
+    wave = loadData.wave;
+    goldStash = loadData.goldStash ? new GoldStash(loadData.goldStash.x, loadData.goldStash.y) : null;
+    goldMines = loadData.goldMines.map(gm => new GoldMine(gm.x, gm.y));
+    towers = loadData.towers.map(t => {
+      let tower = new Tower(t.x, t.y, t.type);
+      tower.level = t.level;
+      tower.hp = 100 + (tower.level - 1)*50;
+      tower.maxHp = tower.hp;
+      tower.fireRate = 1 + (tower.level - 1)*0.3;
+      tower.range = 150 + (tower.level - 1)*20;
+      tower.knockback = 100 + (tower.level - 1)*20;
+      return tower;
+    });
+    showNotification("Game loaded!");
+  } else {
+    showNotification("No saved game found.");
+  }
+});
+</script>
+
+</body>
+</html>
